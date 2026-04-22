@@ -75,25 +75,25 @@ func migrateModels() {
 }
 
 // initRootUser 初始化root用户
-// 如果数据库中没有用户，则创建一个root用户用于管理
+// 如果数据库中没有root用户，则创建一个root用户用于管理
 func initRootUser() {
-	var count int64
-	global.Db.Model(&models.User{}).Count(&count)
+	var rootUser models.User
+	result := global.Db.Where("username = ?", "root").First(&rootUser)
 
-	if count == 0 {
+	if result.Error != nil {
 		hashedPwd, err := utils.HashPassword("root")
 		if err != nil {
 			log.Printf("Failed to hash root password: %v", err)
 			return
 		}
 
-		rootUser := models.User{
+		newRootUser := models.User{
 			Username: "root",
 			Password: hashedPwd,
 			IsRoot:   true,
 		}
 
-		if err := global.Db.Create(&rootUser).Error; err != nil {
+		if err := global.Db.Create(&newRootUser).Error; err != nil {
 			log.Printf("Failed to create root user: %v", err)
 			return
 		}
