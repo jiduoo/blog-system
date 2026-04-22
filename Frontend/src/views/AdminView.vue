@@ -527,9 +527,7 @@ const deleteUser = async (id: number) => {
 // 生成注册码
 const generateInvitationCode = async () => {
   try {
-    const response = await axios.post('/invitation-code/generate', {
-      username: authStore.user?.username
-    });
+    const response = await axios.post('/generate-invitation-code');
     
     ElNotification({
       title: '成功',
@@ -594,11 +592,14 @@ const handleTabChange = (tab: string) => {
   }
 };
 
-onMounted(() => {
+onMounted(async () => {
   themeStore.initTheme();
+  await authStore.fetchUserProfile();
+  console.log('Is root in onMounted after fetch:', isRoot.value);
   loadBlogs();
   if (isRoot.value) {
     loadUsers();
+    loadInvitationCodes();
   }
 });
 </script>

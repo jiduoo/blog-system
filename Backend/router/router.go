@@ -29,7 +29,6 @@ func SetupRouter() *gin.Engine {
 	{
 		auth.POST("/login", controllers.Login)
 		auth.POST("/register", controllers.Register)
-		auth.POST("/generate-invitation-code", controllers.GenerateInvitationCode)
 	}
 
 	// API路由组
@@ -81,6 +80,7 @@ func SetupRouter() *gin.Engine {
 			api.DELETE("/users/:id", controllers.DeleteUser)
 
 			// 邀请码管理
+			api.POST("/generate-invitation-code", controllers.GenerateInvitationCode)
 			api.GET("/invitation-codes", controllers.GetAllInvitationCodes)
 			api.DELETE("/invitation-codes/:code", controllers.DeleteInvitationCode)
 			api.DELETE("/invitation-codes/cleanup", controllers.CleanupExpiredCodesAPI)

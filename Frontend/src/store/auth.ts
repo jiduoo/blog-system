@@ -19,7 +19,14 @@ export const useAuthStore = defineStore('auth', () => {
     if (!token.value) return;
     try {
       const response = await axios.get('/user/profile');
+      console.log('User profile response:', response.data);
       user.value = response.data;
+      console.log('User value:', user.value);
+      console.log('Is root:', user.value?.isRoot);
+      setTimeout(() => {
+        console.log('User value after timeout:', user.value);
+        console.log('Is root after timeout:', user.value?.isRoot);
+      }, 1000);
     } catch (error) {
       console.error('Failed to fetch user profile:', error);
     }

@@ -15,18 +15,16 @@ import (
 // GenerateInvitationCode 生成新的注册码
 // 需要root用户权限，注册码有效期为7天
 func GenerateInvitationCode(ctx *gin.Context) {
-	var input struct {
-		Username string `json:"username"`
-	}
-
-	if err := ctx.ShouldBindJSON(&input); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	// 从context中获取用户名
+	username, exists := ctx.Get("username")
+	if !exists {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
 
 	// 检查用户是否存在
 	var user models.User
-	if err := global.Db.Where("username = ?", input.Username).First(&user).Error; err != nil {
+	if err := global.Db.Where("username = ?", username).First(&user).Error; err != nil {
 		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "用户不存在"})
 		return
 	}
@@ -43,7 +41,7 @@ func GenerateInvitationCode(ctx *gin.Context) {
 	invitationCode := models.InvitationCode{
 		Code:      code,
 		Used:      false,
-		CreatedBy: input.Username,
+		CreatedBy: username.(string),
 		ExpiresAt: time.Now().Add(7 * 24 * time.Hour), // 7天有效期
 	}
 
@@ -82,13 +80,10 @@ func ValidateInvitationCode(code string) (bool, error) {
 	return true, nil
 }
 
-// MarkInvitationCodeAsUsed 标记注册码为已使用
-// 注册成功后调用，记录使用者和使用时间
+// MarkInvitationCodeAsUsed 标记注册码为已使用并删除
+// 注册成功后调用，记录使用者和使用时间，然后删除注册码
 func MarkInvitationCodeAsUsed(code string, username string) error {
-	return global.Db.Model(&models.InvitationCode{}).Where("code = ?", code).Updates(map[string]interface{}{
-		"used":   true,
-		"usedBy": username,
-	}).Error
+	return global.Db.Where("code = ?", code).Delete(&models.InvitationCode{}).Error
 }
 
 // generateRandomCode 生成指定长度的随机十六进制字符串

@@ -45,11 +45,12 @@ func Register(ctx *gin.Context) {
 	}
 
 	// 创建用户对象
-	user := models.User{
-		Username: input.Username,
-		Password: hashedPwd,
-		IsRoot:   false,
-	}
+user := models.User{
+  Username: input.Username,
+  Password: hashedPwd,
+  IsRoot:   false,
+  HomePath: input.Username, // 使用用户名作为默认的home_path
+}
 
 	// 生成JWT Token
 	token, err := utils.GenerateJWT(user.Username)

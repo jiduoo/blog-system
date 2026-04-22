@@ -80,9 +80,19 @@ const handleSelect = (key: string) => {
     router.push({ name: 'Home' });
   } else if (key === 'userHome') {
     // 跳转到当前用户的个人主页
-    // 这里需要先获取用户的 homePath，暂时跳转到一个默认路径
-    // 实际使用时，应该从用户信息中获取 homePath
-    router.push({ name: 'UserHome', params: { homePath: 'kk3k' } });
+    if (authStore.user && authStore.user.homePath) {
+      router.push({ name: 'UserHome', params: { homePath: authStore.user.homePath } });
+    } else {
+      // 如果用户信息未加载或没有homePath，先获取用户信息
+      authStore.fetchUserProfile().then(() => {
+        if (authStore.user && authStore.user.homePath) {
+          router.push({ name: 'UserHome', params: { homePath: authStore.user.homePath } });
+        } else {
+          // 如果还是没有homePath，跳转到用户中心
+          router.push({ name: 'UserCenter' });
+        }
+      });
+    }
   } else {
     router.push({ name: key.charAt(0).toUpperCase() + key.slice(1) });
   }

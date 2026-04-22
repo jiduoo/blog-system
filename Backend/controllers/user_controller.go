@@ -185,11 +185,11 @@ func CreateUser(c *gin.Context) {
 	}
 
 	// 检查用户名是否已存在
-	var existingUser models.User
-	if err := global.Db.Where("username = ?", input.Username).First(&existingUser).Error; err == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Username already exists"})
-		return
-	}
+var existingUser models.User
+if err := global.Db.Where("username = ?", input.Username).First(&existingUser).Error; err == nil {
+  c.JSON(http.StatusBadRequest, gin.H{"error": "用户名已存在"})
+  return
+}
 
 	// 哈希密码
 	hashedPassword, err := utils.HashPassword(input.Password)
@@ -199,16 +199,17 @@ func CreateUser(c *gin.Context) {
 	}
 
 	// 创建用户
-	newUser := models.User{
-		Username: input.Username,
-		Password: hashedPassword,
-		IsRoot:   input.IsRoot,
-	}
+newUser := models.User{
+  Username:  input.Username,
+  Password:  hashedPassword,
+  IsRoot:    input.IsRoot,
+  HomePath:  input.Username, // 使用用户名作为默认的home_path
+}
 
-	if err := global.Db.Create(&newUser).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
-		return
-	}
+if err := global.Db.Create(&newUser).Error; err != nil {
+  c.JSON(http.StatusInternalServerError, gin.H{"error": "创建用户失败: " + err.Error()})
+  return
+}
 
 	c.JSON(http.StatusCreated, newUser)
 }
