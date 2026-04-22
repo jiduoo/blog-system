@@ -11,6 +11,20 @@
         >
           文章管理
         </button>
+        <button 
+          v-if="isRoot"
+          :class="{ 'active': activeTab === 'users' }"
+          @click="activeTab = 'users'"
+        >
+          用户管理
+        </button>
+        <button 
+          v-if="isRoot"
+          :class="{ 'active': activeTab === 'invitations' }"
+          @click="activeTab = 'invitations'"
+        >
+          注册码管理
+        </button>
       </div>
       
       <!-- 文章管理 -->
@@ -62,6 +76,83 @@
           暂无文章
         </div>
       </div>
+      
+      <!-- 用户管理 -->
+      <div v-if="activeTab === 'users' && isRoot" class="admin-section">
+        <h2>用户管理</h2>
+        
+        <div class="admin-actions">
+          <button class="add-btn" @click="showCreateUserModal = true">添加用户</button>
+        </div>
+        
+        <div class="user-list">
+          <div 
+            v-for="user in users" 
+            :key="user.ID"
+            class="user-item"
+          >
+            <div class="user-info">
+              <h3>{{ user.Username }}</h3>
+              <p class="user-meta">
+                ID: {{ user.ID }} | {{ user.IsRoot ? '管理员' : '普通用户' }}
+              </p>
+            </div>
+            <div class="user-actions">
+              <button @click="editUser(user)">编辑</button>
+              <button 
+                v-if="!user.IsRoot"
+                class="delete-btn" 
+                @click="deleteUser(user.ID)"
+              >
+                删除
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <div v-if="users.length === 0" class="empty-message">
+          暂无用户
+        </div>
+      </div>
+      
+      <!-- 注册码管理 -->
+      <div v-if="activeTab === 'invitations' && isRoot" class="admin-section">
+        <h2>注册码管理</h2>
+        
+        <div class="admin-actions">
+          <button class="add-btn" @click="generateInvitationCode">生成注册码</button>
+          <button class="cleanup-btn" @click="cleanupExpiredCodes">清理过期码</button>
+        </div>
+        
+        <div class="invitation-list">
+          <div 
+            v-for="code in invitationCodes" 
+            :key="code.ID"
+            class="invitation-item"
+            :class="{ 'expired': isExpired(code.ExpiresAt), 'used': code.Used }"
+          >
+            <div class="invitation-info">
+              <h3>{{ code.Code }}</h3>
+              <p class="invitation-meta">
+                创建者: {{ code.CreatedBy }} | 创建时间: {{ formatDate(code.CreatedAt) }}
+              </p>
+              <p class="invitation-meta">
+                过期时间: {{ formatDate(code.ExpiresAt) }} | 状态: {{ code.Used ? '已使用' : '未使用' }}
+              </p>
+              <p v-if="code.Used" class="invitation-meta">
+                使用人: {{ code.UsedBy }}
+              </p>
+            </div>
+            <div class="invitation-actions">
+              <button class="delete-btn" @click="deleteInvitationCode(code.Code)">删除</button>
+            </div>
+          </div>
+        </div>
+        
+        <div v-if="invitationCodes.length === 0" class="empty-message">
+          暂无注册码
+        </div>
+      </div>
     </div>
     
     <!-- 编辑博客弹窗 -->
@@ -90,14 +181,62 @@
         </div>
       </div>
     </div>
+    
+    <!-- 创建用户弹窗 -->
+    <div v-if="showCreateUserModal" class="modal-overlay" @click.self="closeCreateUserModal">
+      <div class="modal-content">
+        <h2>添加用户</h2>
+        <div class="form-group">
+          <label>用户名</label>
+          <input v-model="newUser.username" type="text" placeholder="请输入用户名">
+        </div>
+        <div class="form-group">
+          <label>密码</label>
+          <input v-model="newUser.password" type="password" placeholder="请输入密码">
+        </div>
+        <div class="form-group">
+          <label>是否为管理员</label>
+          <input v-model="newUser.isRoot" type="checkbox">
+        </div>
+        <div class="modal-actions">
+          <button @click="closeCreateUserModal">取消</button>
+          <button class="submit-btn" @click="createUser">保存</button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 编辑用户弹窗 -->
+    <div v-if="showEditUserModal" class="modal-overlay" @click.self="closeEditUserModal">
+      <div class="modal-content">
+        <h2>编辑用户</h2>
+        <div class="form-group">
+          <label>用户名</label>
+          <input v-model="editingUser.username" type="text" placeholder="请输入用户名">
+        </div>
+        <div class="form-group">
+          <label>新密码（留空表示不修改）</label>
+          <input v-model="editingUser.password" type="password" placeholder="请输入新密码">
+        </div>
+        <div class="form-group">
+          <label>是否为管理员</label>
+          <input v-model="editingUser.isRoot" type="checkbox" :disabled="editingUser.id === 1">
+          <span v-if="editingUser.id === 1" class="disabled-hint">(root用户不可修改)</span>
+        </div>
+        <div class="modal-actions">
+          <button @click="closeEditUserModal">取消</button>
+          <button class="submit-btn" @click="updateUser">保存</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { useThemeStore } from '../store/theme';
+import { useAuthStore } from '../store/auth';
 import axios from '../axios';
-import { ElMessage, ElMessageBox } from 'element-plus';
+import { ElMessage, ElMessageBox, ElNotification } from 'element-plus';
 
 interface Tag {
   ID: number;
@@ -116,9 +255,29 @@ interface Blog {
   tags: Tag[];
 }
 
+interface User {
+  ID: number;
+  Username: string;
+  IsRoot: boolean;
+  HomePath: string;
+}
+
+interface InvitationCode {
+  ID: number;
+  Code: string;
+  Used: boolean;
+  CreatedBy: string;
+  CreatedAt: string;
+  ExpiresAt: string;
+  UsedBy: string;
+}
+
 const themeStore = useThemeStore();
+const authStore = useAuthStore();
 const activeTab = ref('blogs');
 const blogs = ref<Blog[]>([]);
+const users = ref<User[]>([]);
+const invitationCodes = ref<InvitationCode[]>([]);
 const searchKeyword = ref('');
 
 // 编辑博客相关
@@ -131,6 +290,25 @@ const editingBlog = ref({
   tagsInput: ''
 });
 
+// 编辑用户相关
+const showCreateUserModal = ref(false);
+const showEditUserModal = ref(false);
+const newUser = ref({
+  username: '',
+  password: '',
+  isRoot: false
+});
+const editingUser = ref({
+  id: 0,
+  username: '',
+  password: '',
+  isRoot: false
+});
+
+// 计算属性
+const isRoot = computed(() => authStore.user?.isRoot || false);
+
+// 加载文章
 const loadBlogs = async () => {
   try {
     const response = await axios.get('/blogs');
@@ -140,6 +318,27 @@ const loadBlogs = async () => {
   }
 };
 
+// 加载用户
+const loadUsers = async () => {
+  try {
+    const response = await axios.get('/users');
+    users.value = response.data;
+  } catch (error) {
+    ElMessage.error('加载用户失败');
+  }
+};
+
+// 加载邀请码
+const loadInvitationCodes = async () => {
+  try {
+    const response = await axios.get('/invitation-codes');
+    invitationCodes.value = response.data;
+  } catch (error) {
+    ElMessage.error('加载注册码失败');
+  }
+};
+
+// 搜索文章
 const searchBlogs = async () => {
   try {
     if (searchKeyword.value.trim()) {
@@ -153,11 +352,13 @@ const searchBlogs = async () => {
   }
 };
 
+// 清除搜索
 const clearSearch = () => {
   searchKeyword.value = '';
   loadBlogs();
 };
 
+// 编辑文章
 const editBlog = (blog: Blog) => {
   editingBlog.value = {
     ID: blog.ID,
@@ -169,6 +370,7 @@ const editBlog = (blog: Blog) => {
   showEditModal.value = true;
 };
 
+// 保存文章
 const saveBlog = async () => {
   if (!editingBlog.value.title.trim() || !editingBlog.value.content.trim()) {
     ElMessage.warning('标题和内容不能为空');
@@ -196,6 +398,7 @@ const saveBlog = async () => {
   }
 };
 
+// 删除文章
 const deleteBlog = async (id: number) => {
   try {
     await ElMessageBox.confirm('确定要删除这篇文章吗?', '提示', {
@@ -214,6 +417,7 @@ const deleteBlog = async (id: number) => {
   }
 };
 
+// 关闭编辑文章弹窗
 const closeEditModal = () => {
   showEditModal.value = false;
   editingBlog.value = {
@@ -225,14 +429,177 @@ const closeEditModal = () => {
   };
 };
 
+// 关闭创建用户弹窗
+const closeCreateUserModal = () => {
+  showCreateUserModal.value = false;
+  newUser.value = {
+    username: '',
+    password: '',
+    isRoot: false
+  };
+};
+
+// 关闭编辑用户弹窗
+const closeEditUserModal = () => {
+  showEditUserModal.value = false;
+  editingUser.value = {
+    id: 0,
+    username: '',
+    password: '',
+    isRoot: false
+  };
+};
+
+// 编辑用户
+const editUser = (user: User) => {
+  editingUser.value = {
+    id: user.ID,
+    username: user.Username,
+    password: '',
+    isRoot: user.IsRoot
+  };
+  showEditUserModal.value = true;
+};
+
+// 创建用户
+const createUser = async () => {
+  if (!newUser.value.username.trim() || !newUser.value.password.trim()) {
+    ElMessage.warning('用户名和密码不能为空');
+    return;
+  }
+
+  try {
+    await axios.post('/users', {
+      username: newUser.value.username,
+      password: newUser.value.password,
+      isRoot: newUser.value.isRoot
+    });
+    
+    ElMessage.success('用户创建成功');
+    closeCreateUserModal();
+    loadUsers();
+  } catch (error: any) {
+    ElMessage.error(error.response?.data?.error || '创建用户失败');
+  }
+};
+
+// 更新用户
+const updateUser = async () => {
+  if (!editingUser.value.username.trim()) {
+    ElMessage.warning('用户名不能为空');
+    return;
+  }
+
+  try {
+    await axios.put(`/users/${editingUser.value.id}`, {
+      username: editingUser.value.username,
+      password: editingUser.value.password,
+      isRoot: editingUser.value.isRoot
+    });
+    
+    ElMessage.success('用户更新成功');
+    closeEditUserModal();
+    loadUsers();
+  } catch (error: any) {
+    ElMessage.error(error.response?.data?.error || '更新用户失败');
+  }
+};
+
+// 删除用户
+const deleteUser = async (id: number) => {
+  try {
+    await ElMessageBox.confirm('确定要删除这个用户吗?', '提示', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    });
+    
+    await axios.delete(`/users/${id}`);
+    ElMessage.success('用户删除成功');
+    loadUsers();
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error(error.response?.data?.error || '删除用户失败');
+    }
+  }
+};
+
+// 生成注册码
+const generateInvitationCode = async () => {
+  try {
+    const response = await axios.post('/invitation-code/generate', {
+      username: authStore.user?.username
+    });
+    
+    ElNotification({
+      title: '成功',
+      message: `生成的注册码: ${response.data.code}`,
+      type: 'success',
+      duration: 5000
+    });
+    loadInvitationCodes();
+  } catch (error) {
+    ElMessage.error('生成注册码失败');
+  }
+};
+
+// 删除注册码
+const deleteInvitationCode = async (code: string) => {
+  try {
+    await ElMessageBox.confirm('确定要删除这个注册码吗?', '提示', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    });
+    
+    await axios.delete(`/invitation-codes/${code}`);
+    ElMessage.success('注册码删除成功');
+    loadInvitationCodes();
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error('删除注册码失败');
+    }
+  }
+};
+
+// 清理过期注册码
+const cleanupExpiredCodes = async () => {
+  try {
+    await axios.delete('/invitation-codes/cleanup');
+    ElMessage.success('过期注册码清理成功');
+    loadInvitationCodes();
+  } catch (error) {
+    ElMessage.error('清理过期注册码失败');
+  }
+};
+
+// 检查注册码是否过期
+const isExpired = (expiresAt: string) => {
+  return new Date(expiresAt) < new Date();
+};
+
+// 格式化日期
 const formatDate = (dateString: string) => {
   const date = new Date(dateString);
   return date.toLocaleString();
 };
 
+// 切换标签时加载对应数据
+const handleTabChange = (tab: string) => {
+  activeTab.value = tab;
+  if (tab === 'users' && isRoot.value) {
+    loadUsers();
+  } else if (tab === 'invitations' && isRoot.value) {
+    loadInvitationCodes();
+  }
+};
+
 onMounted(() => {
   themeStore.initTheme();
   loadBlogs();
+  if (isRoot.value) {
+    loadUsers();
+  }
 });
 </script>
 
@@ -657,6 +1024,258 @@ onMounted(() => {
 
 .dark-mode .modal-actions .submit-btn:hover {
   background-color: #ccc;
+}
+
+/* 管理操作按钮 */
+.admin-actions {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.admin-actions button {
+  padding: 10px 20px;
+  border: 1px solid #000;
+  background-color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  color: #000;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.admin-container.dark-mode .admin-actions button {
+  border-color: #fff;
+  background-color: #000;
+  color: #fff;
+}
+
+.admin-actions button:hover {
+  background-color: #333;
+  color: #fff;
+}
+
+.admin-container.dark-mode .admin-actions button:hover {
+  background-color: #ccc;
+  color: #000;
+}
+
+.admin-actions .add-btn {
+  background-color: #4CAF50;
+  border-color: #4CAF50;
+  color: white;
+}
+
+.admin-actions .add-btn:hover {
+  background-color: #45a049;
+}
+
+.admin-actions .cleanup-btn {
+  background-color: #ff9800;
+  border-color: #ff9800;
+  color: white;
+}
+
+.admin-actions .cleanup-btn:hover {
+  background-color: #f57c00;
+}
+
+/* 用户列表 */
+.user-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.user-item {
+  padding: 20px;
+  border: 1px solid #000;
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  transition: all 0.3s ease;
+}
+
+.admin-container.dark-mode .user-item {
+  border-color: #fff;
+}
+
+.user-info h3 {
+  font-size: 18px;
+  font-weight: 700;
+  color: #000;
+  margin-bottom: 8px;
+  transition: color 0.3s ease;
+}
+
+.admin-container.dark-mode .user-info h3 {
+  color: #fff;
+}
+
+.user-meta {
+  font-size: 14px;
+  color: #888;
+  transition: color 0.3s ease;
+}
+
+.admin-container.dark-mode .user-meta {
+  color: #999;
+}
+
+.user-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.user-actions button {
+  padding: 6px 12px;
+  border: 1px solid #000;
+  background-color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  color: #000;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.admin-container.dark-mode .user-actions button {
+  border-color: #fff;
+  background-color: #000;
+  color: #fff;
+}
+
+.user-actions button:hover {
+  background-color: #333;
+  color: #fff;
+}
+
+.admin-container.dark-mode .user-actions button:hover {
+  background-color: #ccc;
+  color: #000;
+}
+
+.user-actions .delete-btn:hover {
+  background-color: #ff4d4f;
+  border-color: #ff4d4f;
+  color: #fff;
+}
+
+.admin-container.dark-mode .user-actions .delete-btn:hover {
+  background-color: #ff4d4f;
+  border-color: #ff4d4f;
+  color: #fff;
+}
+
+/* 邀请码列表 */
+.invitation-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.invitation-item {
+  padding: 20px;
+  border: 1px solid #000;
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  transition: all 0.3s ease;
+}
+
+.admin-container.dark-mode .invitation-item {
+  border-color: #fff;
+}
+
+.invitation-item.expired {
+  opacity: 0.6;
+  border-color: #ff9800;
+}
+
+.invitation-item.used {
+  opacity: 0.6;
+  border-color: #9e9e9e;
+}
+
+.invitation-info h3 {
+  font-size: 18px;
+  font-weight: 700;
+  color: #000;
+  margin-bottom: 8px;
+  word-break: break-all;
+  transition: color 0.3s ease;
+}
+
+.admin-container.dark-mode .invitation-info h3 {
+  color: #fff;
+}
+
+.invitation-meta {
+  font-size: 14px;
+  color: #888;
+  margin-bottom: 4px;
+  transition: color 0.3s ease;
+}
+
+.admin-container.dark-mode .invitation-meta {
+  color: #999;
+}
+
+.invitation-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.invitation-actions button {
+  padding: 6px 12px;
+  border: 1px solid #000;
+  background-color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  color: #000;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.admin-container.dark-mode .invitation-actions button {
+  border-color: #fff;
+  background-color: #000;
+  color: #fff;
+}
+
+.invitation-actions button:hover {
+  background-color: #333;
+  color: #fff;
+}
+
+.admin-container.dark-mode .invitation-actions button:hover {
+  background-color: #ccc;
+  color: #000;
+}
+
+.invitation-actions .delete-btn:hover {
+  background-color: #ff4d4f;
+  border-color: #ff4d4f;
+  color: #fff;
+}
+
+.admin-container.dark-mode .invitation-actions .delete-btn:hover {
+  background-color: #ff4d4f;
+  border-color: #ff4d4f;
+  color: #fff;
+}
+
+/* 禁用提示 */
+.disabled-hint {
+  font-size: 12px;
+  color: #888;
+  margin-left: 8px;
+  font-style: italic;
+}
+
+.admin-container.dark-mode .disabled-hint {
+  color: #999;
 }
 
 @media (min-width: 768px) {

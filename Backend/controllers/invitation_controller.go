@@ -99,3 +99,81 @@ func generateRandomCode(length int) string {
 	}
 	return hex.EncodeToString(bytes)[:length]
 }
+
+// GetAllInvitationCodes 获取所有邀请码
+// 需要root用户权限
+func GetAllInvitationCodes(c *gin.Context) {
+	// 检查是否是root用户
+	username, _ := c.Get("username")
+	var user models.User
+	if err := global.Db.Where("username = ?", username).First(&user).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	if !user.IsRoot {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Only root user can access this endpoint"})
+		return
+	}
+
+	var invitationCodes []models.InvitationCode
+	if err := global.Db.Find(&invitationCodes).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get invitation codes"})
+		return
+	}
+
+	c.JSON(http.StatusOK, invitationCodes)
+}
+
+// DeleteInvitationCode 删除邀请码
+// 需要root用户权限
+func DeleteInvitationCode(c *gin.Context) {
+	// 检查是否是root用户
+	username, _ := c.Get("username")
+	var user models.User
+	if err := global.Db.Where("username = ?", username).First(&user).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	if !user.IsRoot {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Only root user can access this endpoint"})
+		return
+	}
+
+	code := c.Param("code")
+
+	if err := global.Db.Where("code = ?", code).Delete(&models.InvitationCode{}).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete invitation code"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Invitation code deleted successfully"})
+}
+
+// CleanupExpiredCodes 清理过期的邀请码
+// 可以定时调用或在获取邀请码列表时自动清理
+func CleanupExpiredCodes() {
+	global.Db.Where("expires_at < ?", time.Now()).Delete(&models.InvitationCode{})
+	global.Db.Where("used = ?", true).Delete(&models.InvitationCode{})
+}
+
+// CleanupExpiredCodesAPI 清理过期的邀请码API
+// 需要root用户权限
+func CleanupExpiredCodesAPI(c *gin.Context) {
+	// 检查是否是root用户
+	username, _ := c.Get("username")
+	var user models.User
+	if err := global.Db.Where("username = ?", username).First(&user).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	if !user.IsRoot {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Only root user can access this endpoint"})
+		return
+	}
+
+	CleanupExpiredCodes()
+	c.JSON(http.StatusOK, gin.H{"message": "Expired invitation codes cleaned up successfully"})
+}

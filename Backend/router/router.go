@@ -3,9 +3,10 @@ package router
 import (
 	"backend/controllers"
 	"backend/middlewares"
+	"time"
+
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"time"
 )
 
 // SetupRouter 配置所有路由
@@ -72,6 +73,17 @@ func SetupRouter() *gin.Engine {
 			api.GET("/user/profile", controllers.GetUserProfile)
 			api.PUT("/user/profile", controllers.UpdateUserProfile)
 			api.PUT("/user/password", controllers.UpdateUserPassword)
+
+			// 管理员用户管理
+			api.GET("/users", controllers.GetAllUsers)
+			api.POST("/users", controllers.CreateUser)
+			api.PUT("/users/:id", controllers.UpdateUser)
+			api.DELETE("/users/:id", controllers.DeleteUser)
+
+			// 邀请码管理
+			api.GET("/invitation-codes", controllers.GetAllInvitationCodes)
+			api.DELETE("/invitation-codes/:code", controllers.DeleteInvitationCode)
+			api.DELETE("/invitation-codes/cleanup", controllers.CleanupExpiredCodesAPI)
 		}
 	}
 

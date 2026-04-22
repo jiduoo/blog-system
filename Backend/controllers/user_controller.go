@@ -131,3 +131,193 @@ func GetUserByHomePath(c *gin.Context) {
 		"homePath": user.HomePath,
 	})
 }
+
+// GetAllUsers 获取所有用户列表
+// 需要root用户权限
+func GetAllUsers(c *gin.Context) {
+	// 检查是否是root用户
+	username, _ := c.Get("username")
+	var user models.User
+	if err := global.Db.Where("username = ?", username).First(&user).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	if !user.IsRoot {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Only root user can access this endpoint"})
+		return
+	}
+
+	var users []models.User
+	if err := global.Db.Find(&users).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get users"})
+		return
+	}
+
+	c.JSON(http.StatusOK, users)
+}
+
+// CreateUser 创建新用户
+// 需要root用户权限
+func CreateUser(c *gin.Context) {
+	// 检查是否是root用户
+	username, _ := c.Get("username")
+	var user models.User
+	if err := global.Db.Where("username = ?", username).First(&user).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	if !user.IsRoot {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Only root user can access this endpoint"})
+		return
+	}
+
+	var input struct {
+		Username string `json:"username" binding:"required"`
+		Password string `json:"password" binding:"required"`
+		IsRoot   bool   `json:"isRoot"`
+	}
+
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
+		return
+	}
+
+	// 检查用户名是否已存在
+	var existingUser models.User
+	if err := global.Db.Where("username = ?", input.Username).First(&existingUser).Error; err == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Username already exists"})
+		return
+	}
+
+	// 哈希密码
+	hashedPassword, err := utils.HashPassword(input.Password)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
+		return
+	}
+
+	// 创建用户
+	newUser := models.User{
+		Username: input.Username,
+		Password: hashedPassword,
+		IsRoot:   input.IsRoot,
+	}
+
+	if err := global.Db.Create(&newUser).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, newUser)
+}
+
+// UpdateUser 更新用户信息
+// 需要root用户权限
+func UpdateUser(c *gin.Context) {
+	// 检查是否是root用户
+	username, _ := c.Get("username")
+	var user models.User
+	if err := global.Db.Where("username = ?", username).First(&user).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	if !user.IsRoot {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Only root user can access this endpoint"})
+		return
+	}
+
+	userID := c.Param("id")
+
+	var input struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+		IsRoot   *bool  `json:"isRoot"`
+	}
+
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
+		return
+	}
+
+	var targetUser models.User
+	if err := global.Db.First(&targetUser, userID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
+	// 更新用户信息
+	updates := make(map[string]interface{})
+
+	if input.Username != "" {
+		// 检查新用户名是否已存在
+		var existingUser models.User
+		if err := global.Db.Where("username = ? AND id != ?", input.Username, userID).First(&existingUser).Error; err == nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Username already exists"})
+			return
+		}
+		updates["username"] = input.Username
+	}
+
+	if input.Password != "" {
+		hashedPassword, err := utils.HashPassword(input.Password)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
+			return
+		}
+		updates["password"] = hashedPassword
+	}
+
+	if input.IsRoot != nil {
+		updates["is_root"] = *input.IsRoot
+	}
+
+	if len(updates) > 0 {
+		if err := global.Db.Model(&targetUser).Updates(updates).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user"})
+			return
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "User updated successfully"})
+}
+
+// DeleteUser 删除用户
+// 需要root用户权限
+func DeleteUser(c *gin.Context) {
+	// 检查是否是root用户
+	username, _ := c.Get("username")
+	var user models.User
+	if err := global.Db.Where("username = ?", username).First(&user).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	if !user.IsRoot {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Only root user can access this endpoint"})
+		return
+	}
+
+	userID := c.Param("id")
+
+	// 不允许删除root用户
+	var targetUser models.User
+	if err := global.Db.First(&targetUser, userID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
+	if targetUser.IsRoot {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot delete root user"})
+		return
+	}
+
+	if err := global.Db.Delete(&targetUser).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete user"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "User deleted successfully"})
+}
