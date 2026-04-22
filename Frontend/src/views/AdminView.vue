@@ -120,7 +120,7 @@
         <h2>注册码管理</h2>
         
         <div class="admin-actions">
-          <button class="add-btn" @click="generateInvitationCode">生成注册码</button>
+          <button class="add-btn generate-btn" @click="generateInvitationCode">生成注册码</button>
           <button class="cleanup-btn" @click="cleanupExpiredCodes">清理过期码</button>
         </div>
         
@@ -1034,10 +1034,10 @@ onMounted(() => {
 }
 
 .admin-actions button {
-  padding: 10px 20px;
+  padding: 12px 24px;
   border: 1px solid #000;
   background-color: #fff;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 700;
   color: #000;
   cursor: pointer;
@@ -1068,6 +1068,18 @@ onMounted(() => {
 
 .admin-actions .add-btn:hover {
   background-color: #45a049;
+  color: white;
+}
+
+.admin-container.dark-mode .admin-actions .add-btn {
+  background-color: #4CAF50;
+  border-color: #4CAF50;
+  color: white;
+}
+
+.admin-container.dark-mode .admin-actions .add-btn:hover {
+  background-color: #45a049;
+  color: white;
 }
 
 .admin-actions .cleanup-btn {
@@ -1078,6 +1090,40 @@ onMounted(() => {
 
 .admin-actions .cleanup-btn:hover {
   background-color: #f57c00;
+  color: white;
+}
+
+.admin-container.dark-mode .admin-actions .cleanup-btn {
+  background-color: #ff9800;
+  border-color: #ff9800;
+  color: white;
+}
+
+.admin-container.dark-mode .admin-actions .cleanup-btn:hover {
+  background-color: #f57c00;
+  color: white;
+}
+
+.admin-actions .generate-btn {
+  background-color: #2196F3;
+  border-color: #2196F3;
+  color: white;
+}
+
+.admin-actions .generate-btn:hover {
+  background-color: #1976D2;
+  color: white;
+}
+
+.admin-container.dark-mode .admin-actions .generate-btn {
+  background-color: #2196F3;
+  border-color: #2196F3;
+  color: white;
+}
+
+.admin-container.dark-mode .admin-actions .generate-btn:hover {
+  background-color: #1976D2;
+  color: white;
 }
 
 /* 用户列表 */
