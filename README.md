@@ -2,6 +2,58 @@
 
 一个基于 Vue 3 + TypeScript + Go + Gin + GORM 的前后端分离博客系统，支持无需登录查看文章，登录后可发布、管理文章，包含标签分类、时间归档、个人主页、代码高亮、Markdown 编辑器等功能。
 
+## 🔧 快速开始
+
+### 前置要求
+- Go 1.22.5+
+- Node.js 18+
+- MySQL 5.7+
+- Redis (可选，用于缓存)
+
+### 后端启动
+
+1. **配置数据库**
+   - 修改 `Backend/config/config.yml` 中的数据库连接信息
+
+2. **安装依赖**
+   ```bash
+   cd Backend
+   go mod download
+   ```
+
+3. **启动服务**
+   ```bash
+   go run main.go
+   ```
+   服务默认运行在 `http://localhost:3000`
+
+### 前端启动
+
+1. **安装依赖**
+   ```bash
+   cd Frontend
+   npm install
+   ```
+
+2. **启动开发服务器**
+   ```bash
+   npm run dev
+   ```
+   前端默认运行在 `http://localhost:5173`
+
+### 系统初始化与用户管理
+
+#### Root 用户
+- 系统启动时会自动创建一个 Root 用户
+- 默认账号：`root`
+- 默认密码：`123456`
+- Root 用户拥有最高权限，可管理所有用户和系统设置
+
+#### 注册码
+- 普通用户注册需要注册码
+- 默认注册码：`blog2024`
+- Root 用户可在后台管理系统中生成和管理注册码
+
 ## 📋 功能特性
 
 - **无需登录查看**：访客可直接浏览所有文章
@@ -58,45 +110,6 @@
 ├── LICENSE                   # 许可证
 └── README.md                 # 项目说明
 ```
-
-## 🔧 快速开始
-
-### 前置要求
-- Go 1.22.5+
-- Node.js 18+
-- MySQL 5.7+
-- Redis (可选，用于缓存)
-
-### 后端启动
-
-1. **配置数据库**
-   - 修改 `Backend/config/config.yml` 中的数据库连接信息
-
-2. **安装依赖**
-   ```bash
-   cd Backend
-   go mod download
-   ```
-
-3. **启动服务**
-   ```bash
-   go run main.go
-   ```
-   服务默认运行在 `http://localhost:3000`
-
-### 前端启动
-
-1. **安装依赖**
-   ```bash
-   cd Frontend
-   npm install
-   ```
-
-2. **启动开发服务器**
-   ```bash
-   npm run dev
-   ```
-   前端默认运行在 `http://localhost:5173`
 
 ## 🗄 数据库配置
 
