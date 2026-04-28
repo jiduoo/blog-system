@@ -166,11 +166,19 @@ EOF
 deploy_backend() {
     log_info "开始部署后端..."
     
+    # 获取当前脚本所在目录
+    SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+    PROJECT_DIR=$(dirname "$SCRIPT_DIR")
+    
     # 创建应用目录
     mkdir -p $APP_DIR/Backend
     
-    # 复制后端代码
-    cp -r ../Backend/* $APP_DIR/Backend/
+    # 复制后端代码（只复制源文件，跳过目标目录）
+    if [ "$PROJECT_DIR/Backend" != "$APP_DIR/Backend" ]; then
+        rsync -av --delete "$PROJECT_DIR/Backend/" "$APP_DIR/Backend/" --exclude='*.log' --exclude='__pycache__'
+    else
+        log_warn "后端代码已在目标位置，跳过复制"
+    fi
     
     # 修改配置文件
     sed -i "s|root:123456@tcp(192.168.30.10:3306)/test|blog_user:blog_password@tcp(localhost:3306)/blog_system|g" $APP_DIR/Backend/config/config.yml
@@ -192,15 +200,33 @@ deploy_backend() {
 deploy_frontend() {
     log_info "开始部署前端..."
     
-    # 创建前端目录
+    # 获取当前脚本所在目录
+    SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+    PROJECT_DIR=$(dirname "$SCRIPT_DIR")
+    
+    # 创建应用目录
     mkdir -p $APP_DIR/Frontend
     
-    # 复制前端代码
-    cp -r ../Frontend/* $APP_DIR/Frontend/
+    # 复制前端代码（只复制源文件，跳过目标目录）
+    if [ "$PROJECT_DIR/Frontend" != "$APP_DIR/Frontend" ]; then
+        rsync -av --delete "$PROJECT_DIR/Frontend/" "$APP_DIR/Frontend/" --exclude='node_modules' --exclude='dist' --exclude='*.log'
+    else
+        log_warn "前端代码已在目标位置，跳过复制"
+    fi
     
     # 安装依赖并构建
     cd $APP_DIR/Frontend
+    
+    # 使用国内npm镜像
+    npm config set registry https://registry.npmmirror.com/
+    
+    # 安装依赖
     npm install
+    
+    # 设置vue-tsc执行权限
+    chmod +x node_modules/.bin/vue-tsc 2>/dev/null || true
+    
+    # 构建
     npm run build
     
     if [ $? -eq 0 ]; then
