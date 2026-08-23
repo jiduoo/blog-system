@@ -1,0 +1,143 @@
+# ============================================
+# 博客系统部署工作流（Docker 部署）
+# 触发条件：推送到 main/master 分支 或 手动触发
+# ============================================
+
+name: Deploy Blog System
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'Backend/**'
+      - 'Frontend/**'
+      - 'deploy/**'
+      - '.github/workflows/deploy.yml'
+  workflow_dispatch:
+
+# 避免并发部署
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  GO_VERSION: '1.22.5'
+  NODE_VERSION: '18'
+
+jobs:
+  # ============================================
+  # Job 1: 构建测试（部署前门禁）
+  # ============================================
+  build-and-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: Backend/go.sum
+
+      - name: Build Backend
+        working-directory: Backend
+        run: |
+          go mod download
+          go build -v -o blog-backend .
+          echo "✅ 后端编译成功"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: Frontend/package-lock.json
+
+      - name: Build Frontend
+        working-directory: Frontend
+        run: |
+          npm ci
+          npm run build
+          echo "✅ 前端构建成功"
+
+  # ============================================
+  # Job 2: Docker 部署到服务器
+  # ============================================
+  deploy:
+    name: Deploy (Docker)
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event_name == 'workflow_dispatch'
+    environment:
+      name: production
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # ---------- 同步代码到服务器 ----------
+      - name: Sync Source to Server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          port: ${{ secrets.SERVER_PORT || 22 }}
+          source: 'Backend,Frontend,deploy'
+          target: /opt/blog-system
+          overwrite: true
+
+      # ---------- 执行 Docker 部署 ----------
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          port: ${{ secrets.SERVER_PORT || 22 }}
+          script: |
+            set -e
+            cd /opt/blog-system/deploy
+
+            # 确保 Docker 已安装
+            if ! command -v docker &> /dev/null; then
+              echo "安装 Docker..."
+              curl -fsSL https://get.docker.com | bash -s docker
+              systemctl enable --now docker
+            fi
+
+            # 重新构建并启动
+            echo "构建并启动容器..."
+            docker compose down || docker-compose down || true
+            docker compose up -d --build || docker-compose up -d --build
+
+            # 等待服务就绪
+            echo "等待服务启动..."
+            sleep 30
+            docker compose ps || docker-compose ps
+
+      # ---------- 健康检查 ----------
+      - name: Health Check
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          port: ${{ secrets.SERVER_PORT || 22 }}
+          script: |
+            for i in 1 2 3 4 5; do
+              if curl -sf http://localhost/api/blogs > /dev/null 2>&1; then
+                echo "✅ 部署成功，服务正常"
+                echo "访问地址: http://${{ secrets.SERVER_HOST }}"
+                exit 0
+              fi
+              echo "⏳ 等待服务启动... ($i/5)"
+              sleep 10
+            done
+            echo "❌ 健康检查失败，请查看日志：docker compose logs"
+            exit 1

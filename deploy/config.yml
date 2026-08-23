@@ -1,0 +1,18 @@
+# ============================================
+# Docker 环境配置文件
+# 数据库/Redis 主机名对应 docker-compose 中的服务名
+# ============================================
+
+app:
+  name: BlogSystem
+  port: :3000
+
+database:
+  dsn: blog_user:blog_password@tcp(mysql:3306)/blog_system?charset=utf8mb4&parseTime=True&loc=Local
+  MaxIdleConns: 11
+  MaxOpenCons: 114
+
+redis:
+  addr: redis:6379
+  DB: 0
+  Password: ""

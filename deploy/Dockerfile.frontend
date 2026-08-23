@@ -1,39 +1,30 @@
 # ============================================
-# 博客系统前端 Dockerfile
-# 基于 Node.js 18 官方镜像构建
+# 博客系统前端 Dockerfile（多阶段构建）
+# 构建上下文需为项目根目录
 # ============================================
 
-# 构建阶段
+# ---------- 构建阶段 ----------
 FROM node:18-alpine AS builder
 
-# 设置工作目录
 WORKDIR /app
 
-# 复制依赖文件
-COPY ../Frontend/package.json ../Frontend/package-lock.json ./
-
-# 安装依赖
+# 先复制依赖文件以利用缓存
+COPY Frontend/package.json Frontend/package-lock.json ./
 RUN npm ci
 
-# 复制源代码
-COPY ../Frontend/ .
-
-# 构建生产版本
+# 复制源代码并构建
+COPY Frontend/ .
 RUN npm run build
 
-# ============================================
-# 运行阶段（使用 Nginx 作为静态文件服务器）
-# ============================================
+# ---------- 运行阶段 ----------
 FROM nginx:alpine
 
-# 复制构建产物到 Nginx 静态目录
+# 拷贝构建产物
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# 复制自定义 Nginx 配置
-COPY nginx.conf /etc/nginx/nginx.conf
+# 使用自定义 Nginx 配置（含 API 反向代理）
+COPY deploy/nginx.conf /etc/nginx/nginx.conf
 
-# 暴露端口
 EXPOSE 80
 
-# 启动 Nginx
 CMD ["nginx", "-g", "daemon off;"]
